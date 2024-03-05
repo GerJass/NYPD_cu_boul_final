@@ -1,0 +1,148 @@
+---
+title: "COVID-19"
+output: pdf_document
+date: "2024-02-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r add_libraries}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+## COVID-19 Repository
+
+The data set for this project has been collected from John Hopkins. The repository has plenty of information about the daily cases and deaths across the United States and Worldwide. However today the repository ceased collecting data.
+
+```{r import_jhu_data}
+url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+
+file_names <- c("time_series_covid19_confirmed_global.csv",
+                "time_series_covid19_deaths_global.csv",
+                "time_series_covid19_confirmed_US.csv",
+                "time_series_covid19_deaths_US.csv")
+
+urls <- str_c(url_in,file_names)
+```
+
+```{r read_data}
+global_cases <- read_csv(urls[1])
+global_deaths <- read_csv(urls[2])
+US_cases <- read_csv(urls[3])
+US_deaths <- read_csv(urls[4])
+```
+
+```{r tidy_glob_data}
+global_cases <- global_cases %>%
+    pivot_longer(cols = -c(`Province/State`,
+                           `Country/Region`, Lat, Long),
+                 names_to = "date",
+                 values_to = "cases") %>%
+    select(-c(Lat,Long))
+```
+
+```{r tidy_glob_deaths}
+global_deaths <- global_deaths %>%
+    pivot_longer(cols = -c(`Province/State`,
+                           `Country/Region`, Lat, Long),
+                 names_to = "date",
+                 values_to = "deaths") %>%
+    select(-c(Lat,Long))
+```
+
+```{r tidy_combine_global}
+global <- global_cases %>%
+    full_join(global_deaths) %>%
+    rename(Country_Region = `Country/Region`,
+           Province_State = `Province/State`) %>%
+    mutate(date = mdy(date))
+```
+
+```{r filter}
+global <- global %>% filter(cases > 0)
+```
+
+```{r tidy_US_cases}
+US_cases %>%
+  pivot_longer(cols = -(UID:Combined_Key),
+               names_to = "date",
+               values_to = "cases")
+```
+
+```{r tidyverse}
+US_cases <- US_cases %>%
+  pivot_longer(cols = -(UID:Combined_Key),
+               names_to = "date",
+               values_to = "cases") %>%
+  select(Admin2:cases) %>%
+  mutate(date = mdy(date)) %>%
+  select(-c(Lat, Long_))
+```
+
+```{r tidyverse_deaths}
+US_deaths <- US_deaths %>%
+  pivot_longer(cols = -(UID:Population),
+               names_to = "date",
+               values_to = "deaths") %>%
+  select(Admin2:deaths) %>%
+  mutate(date = mdy(date)) %>%
+  select(-c(Lat, Long_))
+```
+
+
+I will plot all the historic deaths of global data. However here is a bias, since, it's a lot of information, the visualization isn't great. I think there may be improvements to my code.
+``` {r first_plot}
+global_deaths_plot <- ggplot(global, aes(x=date, y=deaths, group=Country_Region, color=Country_Region)) +
+  geom_line(size=0.5, alpha=0.8) +
+  labs(title = "Historic Deaths from COVID-19 Worldwide",
+       x = "Date",
+       y = "Number of Deaths",
+       color = "Country/Region") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(global_deaths_plot)
+```
+
+This is the second plot, in which I plot the historic data of Mexico. Its impressive to see that by 2022 it got stabilized th number of deaths.
+``` {r second_plot}
+mexico_data <- global %>%
+  filter(Country_Region == "Mexico")
+
+mexico_deaths_plot <- ggplot(mexico_data, aes(x=date, y=deaths)) +
+  geom_line(size=1, color="blue") +
+  labs(title = "Historic Deaths from COVID-19 in Mexico",
+       x = "Date",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(mexico_deaths_plot)
+```
+
+Here I propose a linear prediction model compared to the historic data of Mexico.
+```{r model}
+mexico_data <- global %>%
+  filter(Country_Region == "Mexico")
+
+model <- lm(deaths ~ date, data = mexico_data)
+
+mexico_deaths_plot_with_model <- ggplot(mexico_data, aes(x=date, y=deaths)) +
+  geom_point(size=1, color="blue") +
+  geom_smooth(method=lm, se=FALSE, color="red", linetype="dashed") +
+  labs(title = "Statistical Linear Prediction Model for COVID-19 Deaths in Mexico",
+       x = "Date",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(mexico_deaths_plot_with_model)
+```
+
+## Conclusions
+The Covid-19 pandemic was a health problem worldwide, and with this analysis I can see that in Mexico occurred a stabilization process. However, at the beginning of each new year, it got elevated. This is because there were parties like new year's eve. As far as I know, the stabilization process began when there were vaccination for all the population.
+Bias I encountered were, firstly, my first visualization since it's very difficult to put all the countries into one analysis. This may be misleading.
+Secondly, it changes the analysis city from city here in Mexico. This may be a process of geographical economy and politics.
+And finally, the prediction should be compared with new cases for the year 2024.
